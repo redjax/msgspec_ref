@@ -16,12 +16,15 @@ from datetime import datetime, timedelta
 from schemas.base import BaseStruct
 
 import uuid
+import json
 
 import msgspec
 
 if TYPE_CHECKING:
-    import requests
-    import requests_cache
+    ...
+
+import requests
+import requests_cache
 
 from requests_cache import CachedSession, SQLiteCache
 
@@ -63,17 +66,18 @@ class ClientCacheSettings(BaseStruct):
 class ClientResponse(BaseStruct):
     __schema_name__ = "ClientResponse"
 
-    # original_res: Union[
-    #     requests.Response,
-    #     requests_cache.CachedResponse,
-    #     requests_cache.OriginalResponse,
-    # ] = None
+    original_res: Union[
+        requests.Response,
+        requests_cache.CachedResponse,
+        requests_cache.OriginalResponse,
+    ] = None
     status_code: int = None
-    content: bytes = None
+    # content: bytes = None
+    content: Union[bytes, str, dict[str, Any]] = None
     next: Union[requests_cache.CachedRequest, requests.Request] = None
     created_at: Union[datetime, timedelta] = None
     elapsed: Union[datetime, timedelta] = None
-    encoding: str = None
+    encoding: Union[bytes, str] = None
     expires: Union[datetime, timedelta] = None
     headers: Union[dict, OrderedDict] = None
     history: list = None
@@ -86,12 +90,6 @@ class ClientResponse(BaseStruct):
     ok: bool = None
     revalidated: bool = None
     size: int = None
-
-    @property
-    def content_decoded(self) -> str:
-        content_decoded = self.content.decode()
-
-        return content_decoded
 
     @property
     def _json(self) -> list[dict]:
@@ -147,11 +145,17 @@ class RequestClient(BaseStruct):
         #  response dict's dunder method & key "_store"
         _headers = res.headers.__dict__["_store"]
 
+        if res.content:
+            ## If there is content, decode from bytes & load into JSON/dict
+            _content = json.loads(res.content.decode("utf-8"))
+        else:
+            _content = None
+
         _res = ClientResponse(
             # original_res=res,
             url=res.url,
             status_code=res.status_code,
-            content=res.content,
+            content=_content,
             next=res.next,
             created_at=_created_at,
             elapsed=res.elapsed,

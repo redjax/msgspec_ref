@@ -4,7 +4,7 @@ import stackprinter
 
 stackprinter.set_excepthook(style="darkbg2")
 
-from typing import Union, Any, Set, TYPE_CHECKING
+from typing import Union, Any, Set, TYPE_CHECKING, Type
 
 import msgspec
 import json
@@ -23,6 +23,9 @@ from lib.constants import (
 if TYPE_CHECKING:
     ...
 
+import requests
+import requests_cache
+
 from schemas.request_models import (
     RequestClient,
     ClientCacheSettings,
@@ -30,6 +33,7 @@ from schemas.request_models import (
     ClientResponse,
 )
 from utils.requests_util.cache_handler import make_cache_session
+from utils.requests_util.encode_decode import encode_clientresponse
 
 random_user_cache_conf = ClientCacheSettings(
     url=random_user_api_url, cache_name="random_user_api", backend="sqlite"
@@ -41,43 +45,29 @@ _client = make_cache_session(cache_settings=random_user_cache_conf)
 res = _client.get()
 print(f"[DEBUG] Results ({type(res)}):\n{res}")
 
-_encode_obj = json.dumps(
-    {
-        "status_code": res.status_code,
-        "content": res.content_decoded,
-        "created_at": str(res.created_at),
-        "elapsed": str(res.elapsed),
-        "encoding": res.encoding,
-        "expires": str(res.expires),
-        "from_cache": res.from_cache,
-        "history": res.history,
-        "ok": res.ok,
-        "reason": res.reason,
-    }
-)
+# res_dict = res.to_dict()
+# print(f"[DEBUG] Res dict:\n{res_dict}")
 
-print(f"[INFO] Encoding response")
+encode_msg = {
+    "url": res.url,
+    "revalidated": res.revalidated,
+    "ok": res.ok,
+    "status_code": res.status_code,
+    "reason": res.reason,
+    "from_cache": res.from_cache,
+    "expires": res.expires,
+    "headers": res.headers,
+    "content": res.content,
+    "size": res.size,
+}
 
-_content_encode = msgspec.json.encode(
-    msgspec.to_builtins(
-        _encode_obj,
-        builtin_types=(
-            datetime.datetime,
-            datetime.date,
-            datetime.time,
-        ),
-        str_keys=True,
-    )
-)
-_content_decode = msgspec.json.decode(
-    msgspec.from_builtins(
-        _content_encode,
-        type=ClientResponse,
-        builtin_types=(datetime.datetime, datetime.date, datetime.time),
-    ),
-)
+# msg = msgspec.json.encode(encode_msg)
+# _decode = msgspec.json.decode(msg)
 
-print(f"[DEBUG] Decoded message ({type(_content_decode)}):\n{_content_decode}")
+msg = encode_clientresponse(res=res)
+print(f"[DEBUG] Encoded msg ({type(msg)}):\n{msg}")
+
+# print(f"[DEBUG] Decoded message ({type(_decode)}): {_decode}")
 
 if TYPE_CHECKING:
     ...
